@@ -1,0 +1,23 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+
+# Virtual environment
+.venv/
+venv/
+
+# Streamlit
+.streamlit/secrets.toml
+
+# Data absensi
+data/input/
+data/output/
+*.xlsx
+*.xls
+*.csv
+
+# OS / Editor
+.DS_Store
+.vscode/
+.idea/
