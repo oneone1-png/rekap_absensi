@@ -1,4 +1,6 @@
 from datetime import date, time, timedelta
+from src.special_status import buat_peta_status
+
 import re
 
 import pandas as pd
@@ -56,31 +58,99 @@ def nama_file_aman(teks):
     return re.sub(r"[^A-Za-z0-9_-]+", "_", teks.strip()).strip("_")
 
 
-def tampilkan_metrik(total, jumlah_karyawan=None):
+def tampilkan_metrik(
+    total,
+    jumlah_karyawan=None,
+):
     if jumlah_karyawan is not None:
         kolom = st.columns(6)
-        kolom[0].metric("Karyawan", jumlah_karyawan)
+
+        kolom[0].metric(
+            "Karyawan",
+            jumlah_karyawan,
+        )
+
         offset = 1
     else:
         kolom = st.columns(5)
         offset = 0
 
-    kolom[offset].metric("Hadir", total["hadir"])
-    kolom[offset + 1].metric("Terlambat", total["terlambat"])
-    kolom[offset + 2].metric("Pulang Awal", total["pulang_awal"])
-    kolom[offset + 3].metric("Scan Tidak Lengkap", total["scan_tidak_lengkap"])
-    kolom[offset + 4].metric(
-        "Tanpa Data", total["tidak_ada_data"] + total["tidak_hadir"]
+    kolom[offset].metric(
+        "Hadir",
+        total["hadir"],
     )
 
-    detail = st.columns(4)
-    detail[0].metric("Total Jam Kerja", menit_ke_jam(total["total_menit_kerja"]))
-    detail[1].metric("Total Jam Lembur", menit_ke_jam(total["total_menit_lembur"]))
-    detail[2].metric(
-        "Total Menit Terlambat", f'{total["total_menit_terlambat"]} menit'
+    kolom[offset + 1].metric(
+        "Terlambat",
+        total["terlambat"],
     )
+
+    kolom[offset + 2].metric(
+        "Pulang Awal",
+        total["pulang_awal"],
+    )
+
+    kolom[offset + 3].metric(
+        "Scan Tidak Lengkap",
+        total["scan_tidak_lengkap"],
+    )
+
+    kolom[offset + 4].metric(
+        "Tanpa Data",
+        (
+            total["tidak_ada_data"]
+            + total["tidak_hadir"]
+        ),
+    )
+
+    # TOTAL JAM DAN MENIT
+    detail = st.columns(4)
+
+    detail[0].metric(
+        "Total Jam Kerja",
+        menit_ke_jam(
+            total["total_menit_kerja"]
+        ),
+    )
+
+    detail[1].metric(
+        "Total Jam Lembur",
+        menit_ke_jam(
+            total["total_menit_lembur"]
+        ),
+    )
+
+    detail[2].metric(
+        "Total Menit Terlambat",
+        f'{total["total_menit_terlambat"]} menit',
+    )
+
     detail[3].metric(
-        "Total Menit Pulang Awal", f'{total["total_menit_pulang_awal"]} menit'
+        "Total Menit Pulang Awal",
+        f'{total["total_menit_pulang_awal"]} menit',
+    )
+
+    # STATUS IZIN, SAKIT, CUTI, DAN LIBUR
+    status_resmi = st.columns(4)
+
+    status_resmi[0].metric(
+        "Izin",
+        total["izin"],
+    )
+
+    status_resmi[1].metric(
+        "Sakit",
+        total["sakit"],
+    )
+
+    status_resmi[2].metric(
+        "Cuti",
+        total["cuti"],
+    )
+
+    status_resmi[3].metric(
+        "Libur",
+        total["libur"],
     )
 
 
@@ -160,8 +230,104 @@ try:
             or (data.get("departemen", "") or "Tanpa Departemen")
             == departemen_filter
         ],
-        key=lambda item: (karyawan[item].get("nama", "").lower(), item),
+        key=lambda item: (
+            karyawan[item].get(
+                "nama", 
+                "").lower(), 
+                item),
     )
+
+    st.subheader(
+        "Izin, Sakit, Cuti, Libur Nasional, dan Cuti Hamil"
+    )
+
+    st.caption(
+        "Pilih SEMUA untuk hari libur perusahaan, "
+        "atau pilih ID untuk izin, sakit, dan cuti."
+    )
+
+    template_status = pd.DataFrame({
+        "Tanggal": pd.Series(
+            dtype="datetime64[ns]"
+        ),
+        "ID Karyawan": pd.Series(
+            dtype="str"
+        ),
+        "Status": pd.Series(
+            dtype="str"
+        ),
+        "Keterangan": pd.Series(
+            dtype="str"
+        ),
+    })
+
+    status_input = st.data_editor(
+        template_status,
+        num_rows="dynamic",
+        use_container_width=True,
+        hide_index=True,
+        key="editor_status_khusus",
+        column_config={
+            "Tanggal": (
+                st.column_config.DateColumn(
+                    "Tanggal",
+                    format="DD/MM/YYYY",
+                    required=True,
+                )
+            ),
+            "ID Karyawan": (
+                st.column_config.SelectboxColumn(
+                    "ID Karyawan",
+                    options=[
+                        "SEMUA",
+                        *sorted(karyawan.keys()),
+                    ],
+                    required=True,
+                )
+            ),
+            "Status": (
+                st.column_config.SelectboxColumn(
+                    "Status",
+                    options=[
+                        "IZIN",
+                        "SAKIT",
+                        "CUTI",
+                        "LIBUR",
+                        "Libur Nasional",
+                        "CUTI HAMIL",
+                    ],
+                    required=True,
+                )
+            ),
+            "Keterangan": (
+                st.column_config.TextColumn(
+                    "Keterangan"
+                )
+            ),
+        },
+    )
+
+    records_status = (
+        status_input
+        .dropna(
+            subset=[
+                "Tanggal",
+                "ID Karyawan",
+                "Status",
+            ]
+        )
+        .to_dict("records")
+    )
+
+    status_khusus = buat_peta_status(
+        records_status
+    )
+
+    # Kode lama dilanjutkan dari sini
+    label_ke_id = {
+        f"{karyawan[item]['nama']} ({item})": item
+        for item in daftar_id
+    }
 
     label_ke_id = {
         f"{karyawan[item]['nama']} ({item})": item for item in daftar_id
@@ -176,6 +342,7 @@ try:
         "toleransi_terlambat": int(toleransi_terlambat),
         "toleransi_pulang_awal": int(toleransi_pulang_awal),
         "hari_kerja": [PILIHAN_HARI[nama] for nama in nama_hari_kerja],
+        "status_khusus": status_khusus,
     }
 
     hasil_individu = buat_rekap_bulanan(

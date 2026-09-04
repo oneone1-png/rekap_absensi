@@ -1,5 +1,7 @@
 import calendar
 from datetime import date, datetime
+from src.special_status import cari_status_khusus
+
 
 
 STATUS_HADIR = {
@@ -106,13 +108,34 @@ def cek_status(data, terlambat=0, pulang_awal=0):
     return "HADIR"
 
 
-def _baris_kosong(nomor, tanggal, id_karyawan, nama, departemen, tampilkan_identitas):
-    return {
+def _baris_kosong(
+        nomor,
+        tanggal,
+        id_karyawan,
+        nama, 
+        departemen, 
+        tampilkan_identitas,
+        status="TIDAK ADA DATA",
+        keterangan="",
+    ):
+     return {
         "No": nomor,
         "Tanggal": tanggal,
-        "ID": id_karyawan if tampilkan_identitas or nomor == 1 else "",
-        "Departemen": departemen if tampilkan_identitas or nomor == 1 else "",
-        "Nama": nama if tampilkan_identitas or nomor == 1 else "",
+        "ID": (
+            id_karyawan
+            if tampilkan_identitas or nomor == 1
+            else ""
+        ),
+        "Departemen": (
+            departemen
+            if tampilkan_identitas or nomor == 1
+            else ""
+        ),
+        "Nama": (
+            nama
+            if tampilkan_identitas or nomor == 1
+            else ""
+        ),
         "Pagi Masuk": "",
         "Pagi Pulang": "",
         "Siang Masuk": "",
@@ -123,7 +146,8 @@ def _baris_kosong(nomor, tanggal, id_karyawan, nama, departemen, tampilkan_ident
         "Jam Kerja": "",
         "Terlambat": 0,
         "Pulang Awal": 0,
-        "Status": "TIDAK ADA DATA",
+        "Status": status,
+        "Keterangan": keterangan,
     }
 
 
@@ -138,6 +162,7 @@ def buat_rekap_bulanan(
     toleransi_pulang_awal=0,
     hari_kerja=None,
     tampilkan_identitas_setiap_baris=False,
+    status_khusus=None,
 ):
     """Membuat rincian rekap satu karyawan untuk satu bulan."""
     if id_karyawan not in parsed.get("karyawan", {}):
@@ -163,7 +188,31 @@ def buat_rekap_bulanan(
             continue
 
         nomor = len(hasil) + 1
-        data = parsed.get("data_harian", {}).get(hari, {}).get(id_karyawan)
+
+        data = parsed.get("data_harian", {}).get(
+            hari, {}
+            ).get(id_karyawan)
+
+        khusus = cari_status_khusus(
+            status_khusus, 
+            id_karyawan, 
+            tanggal,
+        )
+
+        if khusus is not None:
+            hasil.append(
+                _baris_kosong(
+                    nomor,
+                    tanggal,
+                    id_karyawan,
+                    nama,
+                    departemen,
+                    tampilkan_identitas_setiap_baris,
+                    status=khusus.get("status", "TIDAK ADA DATA"),
+                    keterangan=khusus.get("keterangan", ""),
+                )
+            )
+            continue
 
         if data is None:
             hasil.append(
@@ -174,6 +223,7 @@ def buat_rekap_bulanan(
                     nama,
                     departemen,
                     tampilkan_identitas_setiap_baris,
+                    
                 )
             )
             continue
@@ -214,7 +264,13 @@ def buat_rekap_bulanan(
                 "Jam Kerja": menit_ke_jam(jam_kerja),
                 "Terlambat": terlambat,
                 "Pulang Awal": pulang_awal,
-                "Status": cek_status(data, terlambat, pulang_awal),
+                "Status": cek_status(
+                    data, 
+                    terlambat, 
+                    pulang_awal
+                ),
+
+                "Keterangan": "",
             }
         )
 
@@ -244,8 +300,17 @@ def ringkas_rekap(hasil):
         "scan_tidak_lengkap": 0,
         "tidak_ada_data": 0,
         "tidak_hadir": 0,
+
+        "izin": 0,
+        "sakit": 0,
+        "cuti": 0,
+        "libur": 0,
+        "libur_nasional": 0,
+        "cuti_hamil": 0,
+
         "terlambat": 0,
         "pulang_awal": 0,
+
         "total_menit_terlambat": 0,
         "total_menit_pulang_awal": 0,
         "total_menit_kerja": 0,
@@ -253,27 +318,98 @@ def ringkas_rekap(hasil):
     }
 
     for baris in hasil:
-        status = baris.get("Status", "")
+        status = baris.get(
+            "Status",
+            "",
+        )
+
         if status in STATUS_HADIR:
             ringkasan["hadir"] += 1
+
         elif status == "SCAN TIDAK LENGKAP":
-            ringkasan["scan_tidak_lengkap"] += 1
+            ringkasan[
+                "scan_tidak_lengkap"
+            ] += 1
+
         elif status == "TIDAK ADA DATA":
-            ringkasan["tidak_ada_data"] += 1
+            ringkasan[
+                "tidak_ada_data"
+            ] += 1
+
         elif status == "TIDAK HADIR":
-            ringkasan["tidak_hadir"] += 1
+            ringkasan[
+                "tidak_hadir"
+            ] += 1
+
+        elif status == "IZIN":
+            ringkasan["izin"] += 1
+
+        elif status == "SAKIT":
+            ringkasan["sakit"] += 1
+
+        elif status == "CUTI":
+            ringkasan["cuti"] += 1
+
+        elif status == "LIBUR":
+            ringkasan["libur"] += 1
+
+        elif status == "LIBUR NASIONAL":
+            ringkasan[
+                "libur_nasional"
+            ] += 1
+
+        elif status == "CUTI HAMIL":
+            ringkasan[
+                "cuti_hamil"
+            ] += 1
 
         if "TERLAMBAT" in status:
-            ringkasan["terlambat"] += 1
-        if "PULANG AWAL" in status:
-            ringkasan["pulang_awal"] += 1
+            ringkasan[
+                "terlambat"
+            ] += 1
 
-        ringkasan["total_menit_terlambat"] += int(baris.get("Terlambat", 0) or 0)
-        ringkasan["total_menit_pulang_awal"] += int(baris.get("Pulang Awal", 0) or 0)
-        ringkasan["total_menit_kerja"] += jam_ke_menit(baris.get("Jam Kerja")) or 0
-        ringkasan["total_menit_lembur"] += jam_ke_menit(baris.get("Jam Lembur")) or 0
+        if "PULANG AWAL" in status:
+            ringkasan[
+                "pulang_awal"
+            ] += 1
+
+        ringkasan[
+            "total_menit_terlambat"
+        ] += int(
+            baris.get(
+                "Terlambat",
+                0,
+            ) or 0
+        )
+
+        ringkasan[
+            "total_menit_pulang_awal"
+        ] += int(
+            baris.get(
+                "Pulang Awal",
+                0,
+            ) or 0
+        )
+
+        ringkasan[
+            "total_menit_kerja"
+        ] += (
+            jam_ke_menit(
+                baris.get("Jam Kerja")
+            ) or 0
+        )
+
+        ringkasan[
+            "total_menit_lembur"
+        ] += (
+            jam_ke_menit(
+                baris.get("Jam Lembur")
+            ) or 0
+        )
 
     return ringkasan
+
+
 
 
 def buat_ringkasan_karyawan(parsed, daftar_id, tahun, bulan, **pengaturan):
@@ -291,6 +427,11 @@ def buat_ringkasan_karyawan(parsed, daftar_id, tahun, bulan, **pengaturan):
                 "Hadir": total["hadir"],
                 "Terlambat": total["terlambat"],
                 "Pulang Awal": total["pulang_awal"],
+                "Izin": total["izin"],
+                "Sakit": total["sakit"],
+                "Cuti": total["cuti"],
+                "Libur Nasional": total["libur_nasional"],          
+                "Cuti Hamil": total["cuti_hamil"],              
                 "Scan Tidak Lengkap": total["scan_tidak_lengkap"],
                 "Tidak Hadir": total["tidak_hadir"],
                 "Tidak Ada Data": total["tidak_ada_data"],

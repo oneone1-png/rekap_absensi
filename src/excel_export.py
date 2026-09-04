@@ -21,6 +21,7 @@ DETAIL_HEADERS = [
     "Terlambat (menit)\n遲到",
     "Pulang Awal (menit)\n早退",
     "Status\n狀態",
+    "Keterangan\n備註",
 ]
 
 DETAIL_KEYS = [
@@ -40,6 +41,7 @@ DETAIL_KEYS = [
     "Terlambat",
     "Pulang Awal",
     "Status",
+    "Keterangan",
 ]
 
 RINGKASAN_HEADERS = [
@@ -50,11 +52,18 @@ RINGKASAN_HEADERS = [
     "Hadir",
     "Terlambat",
     "Pulang Awal",
+    "Izin",
+    "Sakit",
+    "Cuti",
+    "Libur Nasional",
+    "Cuti Hamil",
     "Scan Tidak Lengkap",
     "Tidak Hadir",
     "Tidak Ada Data",
     "Total Jam Kerja",
     "Total Jam Lembur",
+    
+
 ]
 
 
@@ -127,7 +136,7 @@ def _buat_sheet_detail(ws, hasil, identitas_tetap=None):
         if warna:
             status_cell.fill = PatternFill("solid", fgColor=warna)
 
-    widths = [5, 13, 11, 17, 26, 12, 12, 12, 12, 13, 13, 12, 12, 15, 17, 27]
+    widths = [5, 13, 11, 17, 26, 12, 12, 12, 12, 13, 13, 12, 12, 15, 17, 27, 30,]
     for index, width in enumerate(widths, start=1):
         ws.column_dimensions[ws.cell(1, index).column_letter].width = width
 
