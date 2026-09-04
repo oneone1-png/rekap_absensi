@@ -1,5 +1,5 @@
 from io import BytesIO
-from datetime import datetime, time
+from datetime import datetime, time, timedelta
 from openpyxl import load_workbook
 
 
@@ -27,6 +27,10 @@ def normalisasi_jam(value):
     if isinstance(value, time):
         return value.strftime("%H:%M")
 
+    if isinstance(value, timedelta):
+        total_menit = int(round(value.total_seconds() / 60)) % (24 * 60)
+        return f"{total_menit // 60:02d}:{total_menit % 60:02d}"
+
     # Excel kadang menyimpan jam sebagai angka pecahan
     if isinstance(value, (int, float)) and 0 <= value < 1:
         total_menit = int(round(value * 24 * 60))
@@ -41,10 +45,20 @@ def normalisasi_jam(value):
     if text == "305":
         return ""
 
+    # Terima nilai teks 07:30:00 atau tanggal+jam dari variasi ekspor mesin.
+    for format_jam in ("%H:%M", "%H:%M:%S", "%Y-%m-%d %H:%M:%S"):
+        try:
+            return datetime.strptime(text, format_jam).strftime("%H:%M")
+        except ValueError:
+            continue
+
     return text
 
 
 def baca_file_absensi(file_bytes):
+
+    if not file_bytes:
+        raise ValueError("File attendance kosong.")
 
     workbook = load_workbook(
         BytesIO(file_bytes),
@@ -72,7 +86,7 @@ def baca_file_absensi(file_bytes):
         if tanggal < 1 or tanggal > 31:
             continue
 
-        data_harian[tanggal] = {}
+        data_harian.setdefault(tanggal, {})
 
         # Data karyawan pada file Anda dimulai sekitar baris 9
         for row in sheet.iter_rows(

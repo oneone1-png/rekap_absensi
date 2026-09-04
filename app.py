@@ -1,274 +1,246 @@
-import streamlit as st
+from datetime import date, time, timedelta
+import re
+
 import pandas as pd
+import streamlit as st
 
+from src.attendance_logic import (
+    buat_rekap_bulanan,
+    buat_rekap_semua_karyawan,
+    buat_ringkasan_karyawan,
+    menit_ke_jam,
+    ringkas_rekap,
+)
 from src.attendance_parser import baca_file_absensi
-from src.attendance_logic import buat_rekap_bulanan
-from src.excel_export import buat_excel_rekap
+from src.excel_export import buat_excel_rekap, buat_excel_rekap_semua
 
 
-st.set_page_config(
-    page_title="Sistem Rekap Absensi",
-    page_icon="📋",
-    layout="wide"
+st.set_page_config(page_title="Sistem Rekap Absensi", page_icon="📋", layout="wide")
+
+NAMA_BULAN = [
+    "Januari",
+    "Februari",
+    "Maret",
+    "April",
+    "Mei",
+    "Juni",
+    "Juli",
+    "Agustus",
+    "September",
+    "Oktober",
+    "November",
+    "Desember",
+]
+
+PILIHAN_HARI = {
+    "Senin": 0,
+    "Selasa": 1,
+    "Rabu": 2,
+    "Kamis": 3,
+    "Jumat": 4,
+    "Sabtu": 5,
+    "Minggu": 6,
+}
+
+
+@st.cache_data(show_spinner=False)
+def parse_file(file_bytes):
+    return baca_file_absensi(file_bytes)
+
+
+def waktu_ke_teks(nilai):
+    return nilai.strftime("%H:%M")
+
+
+def nama_file_aman(teks):
+    return re.sub(r"[^A-Za-z0-9_-]+", "_", teks.strip()).strip("_")
+
+
+def tampilkan_metrik(total, jumlah_karyawan=None):
+    if jumlah_karyawan is not None:
+        kolom = st.columns(6)
+        kolom[0].metric("Karyawan", jumlah_karyawan)
+        offset = 1
+    else:
+        kolom = st.columns(5)
+        offset = 0
+
+    kolom[offset].metric("Hadir", total["hadir"])
+    kolom[offset + 1].metric("Terlambat", total["terlambat"])
+    kolom[offset + 2].metric("Pulang Awal", total["pulang_awal"])
+    kolom[offset + 3].metric("Scan Tidak Lengkap", total["scan_tidak_lengkap"])
+    kolom[offset + 4].metric(
+        "Tanpa Data", total["tidak_ada_data"] + total["tidak_hadir"]
+    )
+
+    detail = st.columns(4)
+    detail[0].metric("Total Jam Kerja", menit_ke_jam(total["total_menit_kerja"]))
+    detail[1].metric("Total Jam Lembur", menit_ke_jam(total["total_menit_lembur"]))
+    detail[2].metric(
+        "Total Menit Terlambat", f'{total["total_menit_terlambat"]} menit'
+    )
+    detail[3].metric(
+        "Total Menit Pulang Awal", f'{total["total_menit_pulang_awal"]} menit'
+    )
+
+
+hari_ini = date.today()
+
+st.title("📋 Sistem Rekap Absensi Karyawan")
+st.caption(
+    "Upload file Excel dari mesin fingerprint, atur jadwal kerja, lalu unduh rekap."
 )
 
-
-st.title(
-    "📋 Sistem Rekap Absensi Karyawan"
-)
-
-st.write(
-    "Upload file attendance kemudian pilih karyawan."
-)
-
-
-
-# UPLOAD FILE
-
-
-file = st.file_uploader(
-    "Upload file attendance",
-    type=["xlsx"]
-)
-
-
-if file:
-
-    try:
-
-        # BACA FILE
-        parsed = baca_file_absensi(
-            file.getvalue()
-        )
-
-        karyawan = parsed[
-            "karyawan"
-        ]
-
-        if not karyawan:
-
-            st.error(
-                "Data karyawan tidak ditemukan."
-            )
-
-            st.stop()
-
-        st.success(
-            f"{len(karyawan)} karyawan berhasil ditemukan."
-        )
-
-
-        # PILIH KARYAWAN
-        pilihan = {}
-
-        for id_karyawan, data in karyawan.items():
-
-            label = (
-                f"{id_karyawan} - "
-                f"{data['nama']}"
-            )
-
-            pilihan[
-                label
-            ] = id_karyawan
-
-        daftar_nama = sorted(
-            pilihan.keys()
-        )
-
-        pilihan_user = st.selectbox(
-            "Pilih karyawan",
-            daftar_nama
-        )
-
-        id_karyawan = pilihan[
-            pilihan_user
-        ]
-
-        master = karyawan[
-            id_karyawan
-        ]
-
-        nama_karyawan = master[
-            "nama"
-        ]
-
-        departemen = master[
-            "departemen"
-        ]
-
-        # INFORMASI KARYAWAN
-        col1, col2, col3 = st.columns(3)
-
-        with col1:
-
-            st.metric(
-                "ID Karyawan",
-                id_karyawan
-            )
-
-        with col2:
-
-            st.metric(
-                "Nama",
-                nama_karyawan
-            )
-
-        with col3:
-
-            st.metric(
-                "Departemen",
-                departemen
-            )
-
-
-        # PERIODE
-       
-
-        st.subheader(
-            "Periode Absensi"
-        )
-
-        col_tahun, col_bulan = st.columns(2)
-
-        with col_tahun:
-
-            tahun = st.number_input(
-                "Tahun",
-                min_value=2020,
-                max_value=2100,
-                value=2026
-            )
-
-        with col_bulan:
-
-            bulan = st.selectbox(
-                "Bulan",
-                list(range(1, 13)),
-                index=7
-            )
-
-        # BUAT REKAP
-
-        hasil = buat_rekap_bulanan(
-            parsed,
-            id_karyawan,
-            int(tahun),
-            int(bulan)
-        )
-
-        df = pd.DataFrame(
-            hasil
-        )
-
-
-        # TAMPILKAN TABEL
-        st.subheader(
-            f"Rekap Absensi - {nama_karyawan}"
-        )
-
-        st.dataframe(
-            df,
-            use_container_width=True,
-            hide_index=True
-        )
-
-        
-        # RINGKASAN
-        hadir = len(
-            df[
-                df["Status"]
-                == "HADIR"
-            ]
-        )
-
-        scan_tidak_lengkap = len(
-            df[
-                df["Status"]
-                == "SCAN TIDAK LENGKAP"
-            ]
-        )
-
-        tidak_ada_data = len(
-            df[
-                df["Status"]
-                == "TIDAK ADA DATA"
-            ]
-        )
-
-        total_terlambat = df[
-            "Terlambat"
-        ].sum()
-
-        st.subheader(
-            "Ringkasan"
-        )
-
-        c1, c2, c3, c4 = st.columns(4)
-
-        with c1:
-
-            st.metric(
-                "Hadir",
-                hadir
-            )
-
-        with c2:
-
-            st.metric(
-                "Scan Tidak Lengkap",
-                scan_tidak_lengkap
-            )
-
-        with c3:
-
-            st.metric(
-                "Tidak Ada Data",
-                tidak_ada_data
-            )
-
-        with c4:
-
-            st.metric(
-                "Total Terlambat",
-                f"{total_terlambat} menit"
-            )
-
-
-        # EXPORT EXCEL
-        excel_file = buat_excel_rekap(
-            hasil,
-            nama_karyawan,
-            id_karyawan,
-            departemen
-        )
-
-        nama_file = (
-            f"Absensi_"
-            f"{nama_karyawan.replace(' ', '_')}_"
-            f"{tahun}_"
-            f"{int(bulan):02d}.xlsx"
-        )
-
-        st.download_button(
-            label="⬇️ Download Rekap Excel",
-            data=excel_file,
-            file_name=nama_file,
-            mime=(
-                "application/"
-                "vnd.openxmlformats-officedocument."
-                "spreadsheetml.sheet"
-            ),
-            use_container_width=True
-        )
-
-
-    except Exception as error:
-
+with st.sidebar:
+    st.header("Pengaturan Rekap")
+    tahun = st.number_input(
+        "Tahun", min_value=2020, max_value=2100, value=hari_ini.year, step=1
+    )
+    bulan = st.selectbox(
+        "Bulan",
+        range(1, 13),
+        index=hari_ini.month - 1,
+        format_func=lambda angka: NAMA_BULAN[angka - 1],
+    )
+
+    st.subheader("Jadwal Kerja")
+    jam_masuk = st.time_input(
+        "Jam masuk", value=time(7, 30), step=timedelta(minutes=5)
+    )
+    jam_pulang = st.time_input(
+        "Jam pulang", value=time(16, 30), step=timedelta(minutes=5)
+    )
+    toleransi_terlambat = st.number_input(
+        "Toleransi terlambat (menit)", min_value=0, max_value=180, value=0
+    )
+    toleransi_pulang_awal = st.number_input(
+        "Toleransi pulang awal (menit)", min_value=0, max_value=180, value=0
+    )
+    nama_hari_kerja = st.multiselect(
+        "Hari kerja",
+        list(PILIHAN_HARI),
+        default=["Senin", "Selasa", "Rabu", "Kamis", "Jumat"],
+    )
+
+file = st.file_uploader("Upload file attendance (.xlsx)", type=["xlsx"])
+
+if not file:
+    st.info("Silakan upload file attendance untuk mulai membuat rekap.")
+    st.stop()
+
+if not nama_hari_kerja:
+    st.error("Pilih minimal satu hari kerja pada panel Pengaturan Rekap.")
+    st.stop()
+
+try:
+    with st.spinner("Membaca data attendance..."):
+        parsed = parse_file(file.getvalue())
+
+    karyawan = parsed["karyawan"]
+    if not karyawan:
         st.error(
-            "Terjadi kesalahan saat membaca data."
+            "Data karyawan tidak ditemukan. Pastikan sheet bernama 1–31 dan data dimulai dari baris 9."
+        )
+        st.stop()
+
+    st.success(f"{len(karyawan)} karyawan berhasil ditemukan.")
+
+    daftar_departemen = sorted(
+        {data.get("departemen", "") or "Tanpa Departemen" for data in karyawan.values()}
+    )
+    departemen_filter = st.selectbox(
+        "Filter departemen", ["Semua Departemen", *daftar_departemen]
+    )
+
+    daftar_id = sorted(
+        [
+            id_karyawan
+            for id_karyawan, data in karyawan.items()
+            if departemen_filter == "Semua Departemen"
+            or (data.get("departemen", "") or "Tanpa Departemen")
+            == departemen_filter
+        ],
+        key=lambda item: (karyawan[item].get("nama", "").lower(), item),
+    )
+
+    label_ke_id = {
+        f"{karyawan[item]['nama']} ({item})": item for item in daftar_id
+    }
+    pilihan_user = st.selectbox("Pilih karyawan", list(label_ke_id))
+    id_karyawan = label_ke_id[pilihan_user]
+    master = karyawan[id_karyawan]
+
+    pengaturan = {
+        "jam_masuk_normal": waktu_ke_teks(jam_masuk),
+        "jam_pulang_normal": waktu_ke_teks(jam_pulang),
+        "toleransi_terlambat": int(toleransi_terlambat),
+        "toleransi_pulang_awal": int(toleransi_pulang_awal),
+        "hari_kerja": [PILIHAN_HARI[nama] for nama in nama_hari_kerja],
+    }
+
+    hasil_individu = buat_rekap_bulanan(
+        parsed, id_karyawan, int(tahun), int(bulan), **pengaturan
+    )
+    hasil_semua = buat_rekap_semua_karyawan(
+        parsed, daftar_id, int(tahun), int(bulan), **pengaturan
+    )
+    ringkasan_semua = buat_ringkasan_karyawan(
+        parsed, daftar_id, int(tahun), int(bulan), **pengaturan
+    )
+
+    tab_individu, tab_semua = st.tabs(["Rekap Per Karyawan", "Rekap Semua Karyawan"])
+
+    with tab_individu:
+        info = st.columns(3)
+        info[0].metric("ID Karyawan", id_karyawan)
+        info[1].metric("Nama", master["nama"])
+        info[2].metric("Departemen", master.get("departemen", "-") or "-")
+
+        total_individu = ringkas_rekap(hasil_individu)
+        tampilkan_metrik(total_individu)
+        st.dataframe(pd.DataFrame(hasil_individu), use_container_width=True, hide_index=True)
+
+        excel_individu = buat_excel_rekap(
+            hasil_individu,
+            master["nama"],
+            id_karyawan,
+            master.get("departemen", ""),
+        )
+        nama_individu = nama_file_aman(master["nama"])
+        st.download_button(
+            "⬇️ Download Rekap Karyawan",
+            data=excel_individu,
+            file_name=f"Absensi_{nama_individu}_{tahun}_{int(bulan):02d}.xlsx",
+            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            use_container_width=True,
         )
 
-        st.exception(
-            error
+    with tab_semua:
+        total_semua = ringkas_rekap(hasil_semua)
+        tampilkan_metrik(total_semua, jumlah_karyawan=len(daftar_id))
+        st.subheader("Ringkasan per Karyawan")
+        st.dataframe(
+            pd.DataFrame(ringkasan_semua), use_container_width=True, hide_index=True
         )
+        with st.expander("Lihat rincian seluruh karyawan"):
+            st.dataframe(
+                pd.DataFrame(hasil_semua), use_container_width=True, hide_index=True
+            )
+
+        excel_semua = buat_excel_rekap_semua(ringkasan_semua, hasil_semua)
+        suffix_departemen = (
+            "Semua_Departemen"
+            if departemen_filter == "Semua Departemen"
+            else nama_file_aman(departemen_filter)
+        )
+        st.download_button(
+            "⬇️ Download Rekap Semua Karyawan",
+            data=excel_semua,
+            file_name=f"Absensi_{suffix_departemen}_{tahun}_{int(bulan):02d}.xlsx",
+            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            use_container_width=True,
+        )
+
+except Exception as error:
+    st.error("Terjadi kesalahan saat memproses data attendance.")
+    st.exception(error)
