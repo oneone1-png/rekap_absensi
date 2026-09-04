@@ -123,7 +123,7 @@ class TestExcelExport(unittest.TestCase):
         file_individu = buat_excel_rekap(rincian, "Budi", "K001", "Produksi")
         wb_individu = load_workbook(file_individu, data_only=True)
         self.assertEqual(wb_individu.sheetnames, ["Absensi"])
-        self.assertEqual(wb_individu["Absensi"].max_column, 16)
+        self.assertEqual(wb_individu["Absensi"].max_column, 17)
         self.assertEqual(wb_individu["Absensi"]["C2"].value, "K001")
 
         ringkasan = [
