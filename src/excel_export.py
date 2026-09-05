@@ -55,8 +55,6 @@ RINGKASAN_HEADERS = [
     "Izin",
     "Sakit",
     "Cuti",
-    "Libur Nasional",
-    "Cuti Hamil",
     "Scan Tidak Lengkap",
     "Tidak Hadir",
     "Tidak Ada Data",

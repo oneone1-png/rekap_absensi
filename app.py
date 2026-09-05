@@ -19,6 +19,25 @@ from src.excel_export import buat_excel_rekap, buat_excel_rekap_semua
 
 st.set_page_config(page_title="Sistem Rekap Absensi", page_icon="📋", layout="wide")
 
+st.markdown(
+    """
+    <style>
+    [data-testid="stMetric"] {
+        padding: 0.1rem 0.2rem;
+    }
+
+    [data-testid="stMetricLabel"] p {
+        font-size: 0.82rem;
+    }
+
+    [data-testid="stMetricValue"] {
+        font-size: 1.5rem;
+    }
+    </style>
+    """,
+    unsafe_allow_html=True,
+)
+
 NAMA_BULAN = [
     "Januari",
     "Februari",
@@ -58,100 +77,173 @@ def nama_file_aman(teks):
     return re.sub(r"[^A-Za-z0-9_-]+", "_", teks.strip()).strip("_")
 
 
+def kartu_metrik(
+    kolom,
+    label,
+    nilai,
+):
+    with kolom:
+        with st.container(border=True):
+            st.metric(
+                label,
+                nilai,
+            )
+
+
 def tampilkan_metrik(
     total,
     jumlah_karyawan=None,
 ):
-    if jumlah_karyawan is not None:
-        kolom = st.columns(6)
+    tanpa_data = (
+        total.get("tidak_ada_data", 0)
+        + total.get("tidak_hadir", 0)
+    )
 
-        kolom[0].metric(
+    # Kartu utama
+    if jumlah_karyawan is None:
+        kartu_pertama = (
+            "Hari Kerja",
+            total.get("hari_kerja", 0),
+        )
+    else:
+        kartu_pertama = (
             "Karyawan",
             jumlah_karyawan,
         )
 
-        offset = 1
-    else:
-        kolom = st.columns(5)
-        offset = 0
-
-    kolom[offset].metric(
-        "Hadir",
-        total["hadir"],
-    )
-
-    kolom[offset + 1].metric(
-        "Terlambat",
-        total["terlambat"],
-    )
-
-    kolom[offset + 2].metric(
-        "Pulang Awal",
-        total["pulang_awal"],
-    )
-
-    kolom[offset + 3].metric(
-        "Scan Tidak Lengkap",
-        total["scan_tidak_lengkap"],
-    )
-
-    kolom[offset + 4].metric(
-        "Tanpa Data",
+    data_utama = [
+        kartu_pertama,
         (
-            total["tidak_ada_data"]
-            + total["tidak_hadir"]
+            "Hadir",
+            total.get("hadir", 0),
         ),
-    )
-
-    # TOTAL JAM DAN MENIT
-    detail = st.columns(4)
-
-    detail[0].metric(
-        "Total Jam Kerja",
-        menit_ke_jam(
-            total["total_menit_kerja"]
+        (
+            "Terlambat",
+            total.get("terlambat", 0),
         ),
-    )
-
-    detail[1].metric(
-        "Total Jam Lembur",
-        menit_ke_jam(
-            total["total_menit_lembur"]
+        (
+            "Pulang Awal",
+            total.get("pulang_awal", 0),
         ),
-    )
+        (
+            "Scan Tidak Lengkap",
+            total.get(
+                "scan_tidak_lengkap",
+                0,
+            ),
+        ),
+        (
+            "Tanpa Data",
+            tanpa_data,
+        ),
+    ]
 
-    detail[2].metric(
-        "Total Menit Terlambat",
-        f'{total["total_menit_terlambat"]} menit',
-    )
+    kolom_utama = st.columns(6)
 
-    detail[3].metric(
-        "Total Menit Pulang Awal",
-        f'{total["total_menit_pulang_awal"]} menit',
-    )
+    for kolom, (label, nilai) in zip(
+        kolom_utama,
+        data_utama,
+    ):
+        kartu_metrik(
+            kolom,
+            label,
+            nilai,
+        )
 
-    # STATUS IZIN, SAKIT, CUTI, DAN LIBUR
-    status_resmi = st.columns(4)
+    # Detail disembunyikan agar halaman ringkas
+    with st.expander(
+        "Detail jam dan status khusus"
+    ):
+        st.markdown(
+            "##### Ringkasan Waktu"
+        )
 
-    status_resmi[0].metric(
-        "Izin",
-        total["izin"],
-    )
+        data_waktu = [
+            (
+                "Total Jam Kerja",
+                menit_ke_jam(
+                    total.get(
+                        "total_menit_kerja",
+                        0,
+                    )
+                ),
+            ),
+            (
+                "Total Jam Lembur",
+                menit_ke_jam(
+                    total.get(
+                        "total_menit_lembur",
+                        0,
+                    )
+                ),
+            ),
+            (
+                "Menit Terlambat",
+                str(
+                    total.get(
+                        "total_menit_terlambat",
+                        0,
+                    )
+                ) + " menit",
+            ),
+            (
+                "Menit Pulang Awal",
+                str(
+                    total.get(
+                        "total_menit_pulang_awal",
+                        0,
+                    )
+                ) + " menit",
+            ),
+        ]
 
-    status_resmi[1].metric(
-        "Sakit",
-        total["sakit"],
-    )
+        kolom_waktu = st.columns(4)
 
-    status_resmi[2].metric(
-        "Cuti",
-        total["cuti"],
-    )
+        for kolom, (label, nilai) in zip(
+            kolom_waktu,
+            data_waktu,
+        ):
+            kartu_metrik(
+                kolom,
+                label,
+                nilai,
+            )
 
-    status_resmi[3].metric(
-        "Libur",
-        total["libur"],
-    )
+        st.markdown(
+            "##### Status Khusus"
+        )
+
+        data_status = [
+            (
+                "Izin",
+                total.get("izin", 0),
+            ),
+            (
+                "Sakit",
+                total.get("sakit", 0),
+            ),
+            (
+                "Cuti",
+                total.get("cuti", 0),
+            ),
+            (
+                "Libur",
+                total.get("libur", 0),
+            ),
+            
+        ]
+
+        kolom_status = st.columns(4)
+
+        for kolom, (label, nilai) in zip(
+            kolom_status,
+            data_status,
+        ):
+            kartu_metrik(
+                kolom,
+                label,
+                nilai,
+            )
 
 
 hari_ini = date.today()
@@ -329,9 +421,6 @@ try:
         for item in daftar_id
     }
 
-    label_ke_id = {
-        f"{karyawan[item]['nama']} ({item})": item for item in daftar_id
-    }
     pilihan_user = st.selectbox("Pilih karyawan", list(label_ke_id))
     id_karyawan = label_ke_id[pilihan_user]
     master = karyawan[id_karyawan]
@@ -358,29 +447,229 @@ try:
     tab_individu, tab_semua = st.tabs(["Rekap Per Karyawan", "Rekap Semua Karyawan"])
 
     with tab_individu:
-        info = st.columns(3)
-        info[0].metric("ID Karyawan", id_karyawan)
-        info[1].metric("Nama", master["nama"])
-        info[2].metric("Departemen", master.get("departemen", "-") or "-")
+        st.subheader(
+            "Rekap Absensi Per Karyawan"
+        )
 
-        total_individu = ringkas_rekap(hasil_individu)
-        tampilkan_metrik(total_individu)
-        st.dataframe(pd.DataFrame(hasil_individu), use_container_width=True, hide_index=True)
+        # ==============================
+        # INFORMASI KARYAWAN
+        # ==============================
+
+        with st.container(border=True):
+            info_id, info_nama, info_departemen = (
+                st.columns([1, 2, 1.5])
+            )
+
+            with info_id:
+                st.caption("ID Karyawan")
+                st.markdown(
+                    f"### {id_karyawan}"
+                )
+
+            with info_nama:
+                st.caption("Nama Karyawan")
+                st.markdown(
+                    f"### {master['nama']}"
+                )
+
+            with info_departemen:
+                st.caption("Departemen")
+                st.markdown(
+                    f"### {master.get('departemen', '-') or '-'}"
+                )
+
+        # ==============================
+        # RINGKASAN KEHADIRAN
+        # ==============================
+
+        st.markdown(
+            "#### Ringkasan Kehadiran"
+        )
+
+        total_individu = ringkas_rekap(
+            hasil_individu
+        )
+
+        tampilkan_metrik(
+            total_individu
+        )
+
+        # ==============================
+        # TABEL ABSENSI
+        # ==============================
+
+        st.markdown(
+            "#### Rincian Absensi"
+        )
+
+        df_individu = pd.DataFrame(
+            hasil_individu
+        )
+
+        # ID, nama, dan departemen tidak perlu
+        # ditampilkan lagi karena sudah ada di atas
+        kolom_tabel = [
+            "No",
+            "Tanggal",
+            "Pagi Masuk",
+            "Pagi Pulang",
+            "Siang Masuk",
+            "Siang Pulang",
+            "Lembur Masuk",
+            "Lembur Pulang",
+            "Jam Kerja",
+            "Jam Lembur",
+            "Terlambat",
+            "Pulang Awal",
+            "Status",
+            "Keterangan",
+        ]
+
+        # Mencegah error jika kolom tertentu
+        # belum tersedia
+        kolom_tabel = [
+            kolom
+            for kolom in kolom_tabel
+            if kolom in df_individu.columns
+        ]
+
+        df_tampil = df_individu[
+            kolom_tabel
+        ].copy()
+
+        # ==============================
+        # FILTER STATUS
+        # ==============================
+
+        daftar_status = sorted(
+            df_tampil["Status"]
+            .dropna()
+            .unique()
+            .tolist()
+        )
+
+        pilihan_status = st.multiselect(
+            "Filter status",
+            options=daftar_status,
+            default=daftar_status,
+            key=f"filter_status_{id_karyawan}",
+        )
+
+        if pilihan_status:
+            df_tampil = df_tampil[
+                df_tampil["Status"].isin(
+                    pilihan_status
+                )
+            ]
+
+        st.caption(
+            f"Menampilkan {len(df_tampil)} "
+            "baris data absensi."
+        )
+
+        st.dataframe(
+            df_tampil,
+            use_container_width=True,
+            hide_index=True,
+            height=520,
+            column_config={
+                "No": st.column_config.NumberColumn(
+                    "No",
+                    width="small",
+                ),
+                "Tanggal": st.column_config.DateColumn(
+                    "Tanggal",
+                    format="DD/MM/YYYY",
+                    width="medium",
+                ),
+                "Pagi Masuk": st.column_config.TextColumn(
+                    "Pagi Masuk",
+                    width="small",
+                ),
+                "Pagi Pulang": st.column_config.TextColumn(
+                    "Pagi Pulang",
+                    width="small",
+                ),
+                "Siang Masuk": st.column_config.TextColumn(
+                    "Siang Masuk",
+                    width="small",
+                ),
+                "Siang Pulang": st.column_config.TextColumn(
+                    "Siang Pulang",
+                    width="small",
+                ),
+                "Jam Kerja": st.column_config.TextColumn(
+                    "Jam Kerja",
+                    width="small",
+                ),
+                "Jam Lembur": st.column_config.TextColumn(
+                    "Jam Lembur",
+                    width="small",
+                ),
+                "Terlambat": st.column_config.NumberColumn(
+                    "Terlambat",
+                    width="small",
+                ),
+                "Pulang Awal": st.column_config.NumberColumn(
+                    "Pulang Awal",
+                    width="small",
+                ),
+                "Status": st.column_config.TextColumn(
+                    "Status",
+                    width="large",
+                ),
+                "Keterangan": st.column_config.TextColumn(
+                    "Keterangan",
+                    width="large",
+                ),
+            },
+        )
+
+        # ==============================
+        # DOWNLOAD EXCEL
+        # ==============================
 
         excel_individu = buat_excel_rekap(
             hasil_individu,
             master["nama"],
             id_karyawan,
-            master.get("departemen", ""),
+            master.get(
+                "departemen",
+                "",
+            ),
         )
-        nama_individu = nama_file_aman(master["nama"])
-        st.download_button(
-            "⬇️ Download Rekap Karyawan",
-            data=excel_individu,
-            file_name=f"Absensi_{nama_individu}_{tahun}_{int(bulan):02d}.xlsx",
-            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-            use_container_width=True,
+
+        nama_individu = nama_file_aman(
+            master["nama"]
         )
+
+        with st.container(border=True):
+            download_col, informasi_col = (
+                st.columns([1, 2])
+            )
+
+            with download_col:
+                st.download_button(
+                    "⬇️ Download Rekap Excel",
+                    data=excel_individu,
+                    file_name=(
+                        f"Absensi_{nama_individu}_"
+                        f"{tahun}_"
+                        f"{int(bulan):02d}.xlsx"
+                    ),
+                    mime=(
+                        "application/vnd."
+                        "openxmlformats-officedocument."
+                        "spreadsheetml.sheet"
+                    ),
+                    use_container_width=True,
+                )
+
+            with informasi_col:
+                st.info(
+                    "File Excel berisi seluruh data "
+                    "karyawan pada periode yang dipilih."
+                )
 
     with tab_semua:
         total_semua = ringkas_rekap(hasil_semua)
