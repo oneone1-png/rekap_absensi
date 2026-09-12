@@ -6,8 +6,6 @@ STATUS_VALID = {
     "SAKIT",
     "CUTI",
     "LIBUR",
-    "LIBUR NASIONAL",
-    "CUTI HAMIL",
 }
 
 

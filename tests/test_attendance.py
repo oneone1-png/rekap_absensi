@@ -12,7 +12,11 @@ from src.attendance_logic import (
     ringkas_rekap,
 )
 from src.attendance_parser import baca_file_absensi, normalisasi_jam
+from src.audit_export import buat_excel_audit_individu, buat_excel_audit_semua
+from src.audit_logic import buat_ringkasan_audit, rincian_karyawan_audit, ringkas_audit
+from src.audit_parser import baca_file_audit
 from src.excel_export import buat_excel_rekap, buat_excel_rekap_semua
+from src.file_parser import deteksi_jenis_file, proses_file
 
 
 def data_uji():
@@ -146,6 +150,75 @@ class TestExcelExport(unittest.TestCase):
         wb_semua = load_workbook(file_semua, data_only=True)
         self.assertEqual(wb_semua.sheetnames, ["Ringkasan", "Rincian"])
         self.assertEqual(wb_semua["Ringkasan"]["B2"].value, "K001")
+
+
+def file_audit_uji():
+    wb = Workbook()
+    ws = wb.active
+    ws.title = "PRODUKSI"
+    ws["B1"] = "MONTH : 2026/06"
+    ws["N3"] = 1
+    ws["N4"] = "jam normal"
+    ws["O4"] = "um"
+    ws["P4"] = "shift malam"
+    ws["Q4"] = "jam sakit"
+    ws["R4"] = "cuti tahunan"
+    ws["S4"] = "cuti khusus"
+    ws["T4"] = "jam lembur"
+    ws["U4"] = "um lembur"
+    ws["V3"] = 2
+    ws["V4"] = "jam normal"
+    ws["A5"] = 1
+    ws["B5"] = 761001
+    ws["C5"] = "Produksi"
+    ws["D5"] = "Operator"
+    ws["E5"] = "Budi"
+    ws["N5"] = 7
+    ws["O5"] = 1
+    ws["T5"] = 2
+    ws["V5"] = 7
+    ws["JE4"] = "LIBUR YANG DIBAYAR"
+    ws["JE5"] = "=N5"
+    output = BytesIO()
+    wb.save(output)
+    return output.getvalue()
+
+
+class TestAudit(unittest.TestCase):
+    def test_deteksi_dan_parser_audit(self):
+        file_bytes = file_audit_uji()
+        self.assertEqual(deteksi_jenis_file(file_bytes), "audit")
+
+        parsed = proses_file(file_bytes)
+        self.assertEqual(parsed["periode"], {"tahun": 2026, "bulan": 6})
+        self.assertEqual(parsed["karyawan"]["761001"]["nama"], "Budi")
+        self.assertEqual(len(parsed["rincian"]), 2)
+        self.assertEqual(parsed["rincian"][0]["status"], "LIBUR DIBAYAR")
+        self.assertEqual(parsed["rincian"][1]["status"], "HADIR")
+        self.assertEqual(parsed["rincian"][0]["jam_lembur"], 2)
+
+    def test_ringkasan_dan_export_audit(self):
+        parsed = baca_file_audit(file_audit_uji())
+        rincian = rincian_karyawan_audit(parsed, "761001")
+        total = ringkas_audit(rincian)
+        self.assertEqual(total["hari_hadir"], 1)
+        self.assertEqual(total["jam_normal"], 14)
+        self.assertEqual(total["jam_hadir"], 7)
+        self.assertEqual(total["libur_dibayar"], 7)
+        self.assertEqual(total["jam_lembur"], 2)
+
+        ringkasan = buat_ringkasan_audit(parsed, ["761001"])
+        self.assertEqual(ringkasan[0]["Jam Hadir"], 7)
+
+        individu = buat_excel_audit_individu(rincian)
+        wb_individu = load_workbook(individu, data_only=True)
+        self.assertEqual(wb_individu.sheetnames, ["Rincian Audit"])
+        self.assertEqual(wb_individu["Rincian Audit"]["B2"].value, "761001")
+
+        semua = buat_excel_audit_semua(ringkasan, rincian)
+        wb_semua = load_workbook(semua, data_only=True)
+        self.assertEqual(wb_semua.sheetnames, ["Ringkasan", "Rincian"])
+        self.assertEqual(wb_semua["Ringkasan"]["B2"].value, "761001")
 
 
 if __name__ == "__main__":

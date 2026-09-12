@@ -305,9 +305,6 @@ def ringkas_rekap(hasil):
         "sakit": 0,
         "cuti": 0,
         "libur": 0,
-        "libur_nasional": 0,
-        "cuti_hamil": 0,
-
         "terlambat": 0,
         "pulang_awal": 0,
 
@@ -352,16 +349,6 @@ def ringkas_rekap(hasil):
 
         elif status == "LIBUR":
             ringkasan["libur"] += 1
-
-        elif status == "LIBUR NASIONAL":
-            ringkasan[
-                "libur_nasional"
-            ] += 1
-
-        elif status == "CUTI HAMIL":
-            ringkasan[
-                "cuti_hamil"
-            ] += 1
 
         if "TERLAMBAT" in status:
             ringkasan[
